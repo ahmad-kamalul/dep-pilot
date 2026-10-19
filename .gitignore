@@ -27,7 +27,6 @@ nota-peribadi*/
 /work/
 **/keys/
 
-# Internal review documents are kept outside this repository.
-/docs/COMMIT_GUIDE.md
-/docs/ASSESSMENT.md
-/docs/REQUIREMENT_AUDIT.md
+
+# Private interview notes and local review artifacts.
+self-notes-dep-pilot/
