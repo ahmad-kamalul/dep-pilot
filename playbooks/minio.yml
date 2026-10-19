@@ -1,0 +1,61 @@
+---
+- name: Deploy standalone MinIO on this Agent host
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    minio_image: dep-pilot/minio:2025-10-15
+  tasks:
+    - name: Validate deployment settings
+      ansible.builtin.assert:
+        that:
+          - minio_name is match('^dep-pilot-minio-[a-f0-9]{32}$')
+          - minio_api_port | int >= 1024
+          - minio_api_port | int <= 65535
+          - minio_console_port | int >= 1024
+          - minio_console_port | int <= 65535
+          - minio_api_port | int != minio_console_port | int
+          - minio_root_user | length >= 3
+          - minio_root_password | length >= 16
+      no_log: true
+
+    - name: Ensure persistent MinIO volume exists
+      community.docker.docker_volume:
+        name: "{{ minio_name }}-data"
+        state: present
+
+    - name: Ensure pinned MinIO container is running
+      community.docker.docker_container:
+        name: "{{ minio_name }}"
+        image: "{{ minio_image }}"
+        pull: never
+        state: started
+        restart_policy: unless-stopped
+        command: server /data --console-address :9001
+        published_ports:
+          - "{{ minio_bind_address }}:{{ minio_api_port }}:9000"
+          - "{{ minio_bind_address }}:{{ minio_console_port }}:9001"
+        volumes:
+          - "{{ minio_name }}-data:/data"
+        env:
+          MINIO_ROOT_USER: "{{ minio_root_user }}"
+          MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
+        labels:
+          dep-pilot.managed: "true"
+          dep-pilot.host: "{{ minio_name }}"
+      no_log: true
+
+    - name: Wait for MinIO readiness on the target Docker host
+      ansible.builtin.uri:
+        url: "http://{{ minio_probe_host }}:{{ minio_api_port }}/minio/health/ready"
+        status_code: 200
+        return_content: false
+      register: readiness
+      until: readiness.status == 200
+      retries: 30
+      delay: 2
+
+    - name: Report deployment outcome
+      ansible.builtin.debug:
+        msg: "MinIO is ready. API port {{ minio_api_port }}, console port {{ minio_console_port }}. Persistent volume retained."

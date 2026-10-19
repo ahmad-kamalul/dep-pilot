@@ -1,0 +1,16 @@
+**/bin
+**/obj
+.git
+.env
+**/state
+**/secrets
+**/*.db*
+artifacts
+work
+**/keys
+local-notes
+private-notes
+self-notes
+**/*.local.md
+TestResults
+__pycache__

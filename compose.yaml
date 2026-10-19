@@ -1,0 +1,141 @@
+name: dep-pilot
+
+x-agent: &agent
+  image: dep-pilot/agent:local
+  build:
+    context: .
+    dockerfile: docker/Agent.Dockerfile
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  secrets:
+    - bootstrap_token
+    - minio_password
+
+x-agent-env: &agent-env
+  Agent__MasterUrl: http://master:8080
+  Agent__AllowInsecureHttp: "true"
+  Agent__StateDirectory: /app/state
+  Agent__MinioBindAddress: 0.0.0.0
+  DEP_PILOT_BOOTSTRAP_TOKEN_FILE: /run/secrets/bootstrap_token
+  DEP_PILOT_MINIO_PASSWORD_FILE: /run/secrets/minio_password
+  DOTNET_EnableDiagnostics: "0"
+
+services:
+  master:
+    image: dep-pilot/master:local
+    build:
+      context: .
+      dockerfile: docker/Master.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MASTER_PORT:-8080}:8080"
+    environment:
+      Master__AllowInsecureHttp: "true"
+      Master__DatabasePath: /app/data/dep-pilot.db
+      DEP_PILOT_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      DEP_PILOT_BOOTSTRAP_TOKEN_FILE: /run/secrets/bootstrap_token
+      DOTNET_EnableDiagnostics: "0"
+    secrets: [admin_password, bootstrap_token]
+    volumes: [master-data:/app/data]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [control]
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/healthz]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  docker-host-a:
+    image: docker:28.5.1-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false"]
+    volumes: [engine-a-data:/var/lib/docker]
+    ports:
+      - "127.0.0.1:${MINIO_A_API_PORT:-19000}:9000"
+      - "127.0.0.1:${MINIO_A_CONSOLE_PORT:-19001}:9001"
+    healthcheck:
+      test: [CMD, docker, info]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks: [engine-a]
+
+  docker-host-b:
+    image: docker:28.5.1-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false"]
+    volumes: [engine-b-data:/var/lib/docker]
+    ports:
+      - "127.0.0.1:${MINIO_B_API_PORT:-29000}:9000"
+      - "127.0.0.1:${MINIO_B_CONSOLE_PORT:-29001}:9001"
+    healthcheck:
+      test: [CMD, docker, info]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks: [engine-b]
+
+  agent-a:
+    <<: *agent
+    environment:
+      <<: *agent-env
+      Agent__Hostname: warehouse-a
+      Agent__MinioProbeHost: docker-host-a
+      DOCKER_HOST: tcp://docker-host-a:2375
+    volumes: [agent-a-state:/app/state]
+    depends_on:
+      master: {condition: service_healthy}
+      docker-host-a: {condition: service_healthy}
+    networks: [control, engine-a]
+
+  agent-b:
+    <<: *agent
+    environment:
+      <<: *agent-env
+      Agent__Hostname: warehouse-b
+      Agent__MinioProbeHost: docker-host-b
+      DOCKER_HOST: tcp://docker-host-b:2375
+    volumes: [agent-b-state:/app/state]
+    depends_on:
+      master: {condition: service_healthy}
+      docker-host-b: {condition: service_healthy}
+    networks: [control, engine-b]
+
+  minio-image:
+    image: dep-pilot/minio:2025-10-15
+    build:
+      context: .
+      dockerfile: docker/Minio.Dockerfile
+    profiles: [tools]
+
+secrets:
+  admin_password: {file: ./secrets/admin-password.txt}
+  bootstrap_token: {file: ./secrets/bootstrap-token.txt}
+  minio_password: {file: ./secrets/minio-password.txt}
+
+volumes:
+  master-data:
+  agent-a-state:
+  agent-b-state:
+  engine-a-data:
+  engine-b-data:
+
+networks:
+  control:
+  engine-a:
+  engine-b:
