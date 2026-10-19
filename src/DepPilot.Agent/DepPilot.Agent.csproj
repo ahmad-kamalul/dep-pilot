@@ -4,5 +4,7 @@
     <ProjectReference Include="../DepPilot.Contracts/DepPilot.Contracts.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.13" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,24 @@
+[Unit]
+Description=Dep Pilot deployment Agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=dep-pilot
+Group=dep-pilot
+WorkingDirectory=/opt/dep-pilot
+ExecStart=/opt/dep-pilot/DepPilot.Agent
+EnvironmentFile=/etc/dep-pilot/agent.env
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=45
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dep-pilot /tmp
+
+[Install]
+WantedBy=multi-user.target

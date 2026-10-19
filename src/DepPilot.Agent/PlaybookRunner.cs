@@ -44,7 +44,8 @@ public sealed class PlaybookRunner(AgentOptions options, AgentState state)
                 minio_api_port = options.MinioApiPort,
                 minio_console_port = options.MinioConsolePort,
                 minio_bind_address = options.MinioBindAddress,
-                minio_probe_host = options.MinioProbeHost
+                minio_probe_host = options.MinioProbeHost,
+                minio_storage_path = options.MinioStoragePath
             };
             // Create with restricted permissions before writing credentials.
             using (var stream = new FileStream(variablesPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -54,8 +55,9 @@ public sealed class PlaybookRunner(AgentOptions options, AgentState state)
             }
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(job.TimeoutSeconds));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
+            var useWsl = OperatingSystem.IsWindows() && options.UseWsl;
             using var process = new Process();
-            process.StartInfo = new ProcessStartInfo(options.AnsibleExecutable)
+            process.StartInfo = new ProcessStartInfo(useWsl ? "wsl.exe" : options.AnsibleExecutable)
             {
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -63,7 +65,10 @@ public sealed class PlaybookRunner(AgentOptions options, AgentState state)
                 CreateNoWindow = true,
                 WorkingDirectory = directory
             };
-            foreach (var argument in new[] { "-i", "localhost,", "--connection", "local", "--extra-vars", "@" + variablesPath, playbookPath }) process.StartInfo.ArgumentList.Add(argument);
+            if (useWsl)
+                foreach (var argument in new[] { "--distribution", options.WslDistribution, "--exec", "env", "ANSIBLE_LOCAL_TEMP=" + WslPath(Path.Combine(directory, "tmp")), "ANSIBLE_NOCOLOR=1", options.AnsibleExecutable })
+                    process.StartInfo.ArgumentList.Add(argument);
+            foreach (var argument in new[] { "-i", "localhost,", "--connection", "local", "--extra-vars", "@" + (useWsl ? WslPath(variablesPath) : variablesPath), useWsl ? WslPath(playbookPath) : playbookPath }) process.StartInfo.ArgumentList.Add(argument);
             process.StartInfo.Environment["ANSIBLE_NOCOLOR"] = "1";
             process.StartInfo.Environment["ANSIBLE_HOST_KEY_CHECKING"] = "True";
             process.StartInfo.Environment["ANSIBLE_LOCAL_TEMP"] = Path.Combine(directory, "tmp");
@@ -104,5 +109,12 @@ public sealed class PlaybookRunner(AgentOptions options, AgentState state)
             var temp = Path.Combine(directory, "tmp");
             if (Directory.Exists(temp)) Directory.Delete(temp, recursive: true);
         }
+    }
+
+    public static string WslPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (full.Length < 3 || full[1] != ':' || full[2] != '\\') throw new InvalidOperationException("Windows Agent state must use a local drive path accessible from WSL.");
+        return "/mnt/" + char.ToLowerInvariant(full[0]) + full[2..].Replace('\\', '/');
     }
 }

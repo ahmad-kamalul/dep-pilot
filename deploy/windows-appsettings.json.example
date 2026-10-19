@@ -1,0 +1,12 @@
+{
+  "Agent": {
+    "MasterUrl": "https://controller.example.com:7443",
+    "StateDirectory": "C:\\ProgramData\\DepPilot\\state",
+    "Hostname": "windows-target-01",
+    "BootstrapTokenFile": "C:\\ProgramData\\DepPilot\\bootstrap-token.txt",
+    "MinioPasswordFile": "C:\\ProgramData\\DepPilot\\minio-password.txt",
+    "ServerCertificateFile": "C:\\ProgramData\\DepPilot\\master.crt",
+    "WslDistribution": "Ubuntu",
+    "AnsibleExecutable": "/opt/dep-pilot/ansible/bin/ansible-playbook"
+  }
+}
