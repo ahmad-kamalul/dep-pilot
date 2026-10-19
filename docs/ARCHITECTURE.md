@@ -32,7 +32,7 @@ sequenceDiagram
     participant Agent
     participant Ansible
     Admin->>Master: Create deployment (cookie + CSRF)
-    Master->>DB: Validate targets; insert deployment and jobs
+    Master->>DB: Validate targets and insert deployment and jobs
     Agent->>Master: Claim work (Agent bearer token)
     Master->>DB: Atomic claim, attempt ID, lease
     Master-->>Agent: Version and expected playbook hash
