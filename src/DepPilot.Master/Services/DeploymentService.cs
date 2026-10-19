@@ -136,6 +136,28 @@ public sealed class DeploymentService(RegistryDb db, TimeProvider clock, IOption
                 .SetProperty(x => x.Summary, "Execution lease expired. Verify local workload state before retrying."), ct);
     }
 
+    public async Task DeregisterAsync(Guid hostId, string actor, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var host = await db.Hosts.SingleOrDefaultAsync(x => x.Id == hostId, ct) ?? throw new DomainException(404, "Host not found.");
+        if (await db.Jobs.AnyAsync(x => x.HostId == hostId && x.Status == JobStatus.Running, ct))
+            throw new DomainException(409, "Stop or cancel running work before deregistering this host.");
+        if (host.DeregisteredAt.HasValue) return;
+        foreach (var job in await db.Jobs.Where(x => x.HostId == hostId && x.Status == JobStatus.Pending).ToListAsync(ct))
+        {
+            job.Status = JobStatus.Cancelled;
+            job.CancelRequested = true;
+            job.FinishedAt = Now;
+            job.Summary = "Host deregistered before execution.";
+        }
+        host.Revoked = true;
+        host.DeregisteredAt = Now;
+        host.MetricsJson = null;
+        Audit(actor, "host.deregistered", host.Id);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+    }
+
     private async Task<DeploymentJob> OwnedJobAsync(Guid hostId, Guid id, Guid attemptId, CancellationToken ct)
     {
         var job = await db.Jobs.SingleOrDefaultAsync(x => x.Id == id && x.HostId == hostId, ct) ?? throw new DomainException(404, "Job not found.");

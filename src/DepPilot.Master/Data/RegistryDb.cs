@@ -36,6 +36,10 @@ public sealed class ManagedHost
     public string TokenHash { get; set; } = "";
     public long LastSeenAt { get; set; }
     public bool Revoked { get; set; }
+    public string IpAddress { get; set; } = "";
+    public string CapabilitiesJson { get; set; } = "[]";
+    public string? MetricsJson { get; set; }
+    public long? DeregisteredAt { get; set; }
 }
 public sealed class Playbook
 {

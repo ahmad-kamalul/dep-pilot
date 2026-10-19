@@ -23,6 +23,7 @@ function render() {
     $('online-hosts').textContent = state.hosts.filter(h => h.online).length;
     $('active-jobs').textContent = state.jobs.filter(j => ['Pending', 'Running'].includes(j.status)).length;
     $('success-jobs').textContent = state.jobs.filter(j => j.status === 'Succeeded').length;
+    for (const id of selected) if (!state.hosts.some(h => h.id === id && !h.revoked)) selected.delete(id);
     const hosts = $('hosts'); hosts.replaceChildren();
     for (const host of state.hosts) {
         const row = el('tr'); const check = el('input'); check.type = 'checkbox'; check.setAttribute('aria-label', 'Select ' + host.hostname); check.disabled = host.revoked;
@@ -30,7 +31,11 @@ function render() {
         check.checked = selected.has(host.id); check.onchange = () => { check.checked ? selected.add(host.id) : selected.delete(host.id); countSelection(); };
         const actions = el('div', undefined, 'actions');
         if (!host.revoked) actions.append(button('Revoke', async () => { if (!confirm(`Revoke access for ${host.hostname}? Running workloads may need manual inspection.`)) return; await api(`hosts/${host.id}/revoke`, {}); selected.delete(host.id); notice('Host access revoked.'); await refresh(); }, true));
-        row.append(cell(check), cell(el('strong', host.hostname), el('small', host.operatingSystem + ' · Agent ' + host.agentVersion)), cell(badge(host.revoked ? 'Revoked' : host.online ? 'Online' : 'Offline')), cell(el('span', date(host.lastSeenAt))), cell(actions)); hosts.append(row);
+        actions.append(button('Remove', async () => { if (!confirm(`Deregister ${host.hostname}? Access is revoked; deployment history and application data are retained. Stop this Agent service afterwards.`)) return; await api(`hosts/${host.id}/deregister`, {}); selected.delete(host.id); notice('Host deregistered. Stop its Agent service; application data is retained.'); await refresh(); }, true));
+        const m = host.metrics;
+        const pct = (used, total) => total > 0 ? (100 * used / total).toFixed(1) + '%' : '—';
+        const metrics = m ? `CPU ${m.cpuPercent == null ? 'sampling' : m.cpuPercent.toFixed(1) + '%'} · Memory ${pct(m.memoryUsedBytes, m.memoryTotalBytes)} · Disk ${pct(m.diskTotalBytes - m.diskFreeBytes, m.diskTotalBytes)}` : 'Resource sample pending';
+        row.append(cell(check), cell(el('strong', host.hostname), el('small', host.operatingSystem + ' · Agent ' + host.agentVersion), el('small', host.ipAddress || 'IP pending'), el('small', (host.capabilities || []).join(', '))), cell(badge(host.revoked ? 'Revoked' : host.online ? 'Online' : 'Offline')), cell(el('span', date(host.lastSeenAt)), el('small', metrics), el('small', 'Sample: ' + date(m?.sampledAt))), cell(actions)); hosts.append(row);
     }
     if (!state.hosts.length) empty(hosts, 'No hosts registered yet. Start an Agent to connect your first host.');
     const current = $('playbook').value; $('playbook').replaceChildren();

@@ -60,13 +60,8 @@ var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<RegistryDb>();
-    await db.Database.EnsureCreatedAsync();
-    await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
-    var content = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "playbooks", "minio.yml"));
-    var hash = TokenSecurity.Hash(content);
-    var existing = await db.Playbooks.SingleOrDefaultAsync(x => x.Name == "Deploy standalone MinIO" && x.Version == "1.0.0");
-    if (existing is null) { db.Playbooks.Add(new() { Name = "Deploy standalone MinIO", Version = "1.0.0", Content = content, Sha256 = hash }); await db.SaveChangesAsync(); }
-    else if (existing.Sha256 != hash) throw new InvalidOperationException("Playbook content changed without a version increment.");
+    await DatabaseSetup.InitializeAsync(db);
+    await DeploymentCatalog.SeedAsync(db, AppContext.BaseDirectory);
 }
 app.UseExceptionHandler();
 app.Use(async (context, next) =>
@@ -96,37 +91,11 @@ app.Use(async (context, next) =>
 app.MapRazorPages();
 app.MapGet("/healthz", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
-app.MapPost("/api/agents/register", async (RegistrationRequest request, HttpContext context, RegistryDb db, CancellationToken ct) =>
-{
-    var auth = context.Request.Headers.Authorization.ToString();
-    if (!auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) || !TokenSecurity.EqualsSecret(auth[7..], settings.BootstrapToken)) return Results.Unauthorized();
-    if (request.InstallationId == Guid.Empty || string.IsNullOrWhiteSpace(request.Hostname) || request.Hostname.Length > 120 || request.OperatingSystem is null || request.OperatingSystem.Length > 256 || request.AgentVersion is null || request.AgentVersion.Length > 40 || request.Token is null || request.Token.Length != 64 || !request.Token.All(Uri.IsHexDigit))
-        return Results.BadRequest(new { detail = "Invalid registration fields." });
-    await using var tx = await db.Database.BeginTransactionAsync(ct);
-    var hash = TokenSecurity.Hash(request.Token);
-    var host = await db.Hosts.SingleOrDefaultAsync(x => x.InstallationId == request.InstallationId, ct);
-    if (host is not null)
-    {
-        if (host.Revoked || !TokenSecurity.EqualsSecret(host.TokenHash, hash)) return Results.Conflict(new { detail = "Installation is revoked or belongs to a different credential." });
-        return Results.Ok(new RegistrationResponse(host.Id));
-    }
-    if (await db.Hosts.AnyAsync(x => x.TokenHash == hash, ct)) return Results.Conflict();
-    host = new() { InstallationId = request.InstallationId, Hostname = request.Hostname, OperatingSystem = request.OperatingSystem, AgentVersion = request.AgentVersion, TokenHash = hash, LastSeenAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
-    db.Hosts.Add(host);
-    db.Audit.Add(new() { Actor = $"agent:{host.Id}", Action = "host.registered", Resource = host.Id.ToString(), CreatedAt = host.LastSeenAt });
-    await db.SaveChangesAsync(ct);
-    await tx.CommitAsync(ct);
-    return Results.Ok(new RegistrationResponse(host.Id));
-}).RequireRateLimiting("enrollment");
-
+app.MapPost("/api/agents/register", (RegistrationRequest r, HttpContext c, RegistryDb db, CancellationToken ct) =>
+    HostRegistry.RegisterAsync(r, c, db, settings, ct)).RequireRateLimiting("enrollment");
 var agent = app.MapGroup("/api/agent").RequireAuthorization("Agent");
-agent.MapPost("/heartbeat", async (HeartbeatRequest request, HttpContext context, RegistryDb db, CancellationToken ct) =>
-{
-    if (request.AgentVersion is null || request.AgentVersion.Length > 40) return Results.BadRequest();
-    var id = HostId(context);
-    await db.Hosts.Where(x => x.Id == id && !x.Revoked).ExecuteUpdateAsync(s => s.SetProperty(x => x.LastSeenAt, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).SetProperty(x => x.AgentVersion, request.AgentVersion), ct);
-    return Results.NoContent();
-});
+agent.MapPost("/heartbeat", (HeartbeatRequest r, HttpContext c, RegistryDb db, CancellationToken ct) => HostRegistry.HeartbeatAsync(HostId(c), r, db, ct));
+agent.MapPost("/deregister", async (HttpContext c, DeploymentService s, CancellationToken ct) => { await s.DeregisterAsync(HostId(c), $"agent:{HostId(c)}", ct); return Results.NoContent(); });
 agent.MapPost("/jobs/claim", async (HttpContext c, DeploymentService service, CancellationToken ct) =>
 {
     var assignment = await service.ClaimAsync(HostId(c), ct);
@@ -147,14 +116,18 @@ admin.MapGet("/csrf", (HttpContext c, IAntiforgery antiforgery) => Results.Ok(ne
 admin.MapGet("/dashboard", async (RegistryDb db, CancellationToken ct) =>
 {
     var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    var hosts = await db.Hosts.OrderBy(x => x.Hostname).Select(x => new HostView(x.Id, x.Hostname, x.OperatingSystem, x.AgentVersion, x.LastSeenAt, !x.Revoked && x.LastSeenAt > now - settings.OfflineAfterSeconds * 1000L, x.Revoked)).ToArrayAsync(ct);
-    var playbooks = await db.Playbooks.Select(x => new PlaybookView(x.Id, x.Name, x.Version, x.Sha256)).ToArrayAsync(ct);
+    var registered = await db.Hosts.Where(x => x.DeregisteredAt == null).OrderBy(x => x.Hostname).ToListAsync(ct);
+    var hosts = registered.Select(x => HostRegistry.View(x, settings, now)).ToArray();
+    var available = await db.Playbooks.ToListAsync(ct);
+    var playbooks = available.GroupBy(x => x.Name).Select(g => g.OrderByDescending(x => System.Version.Parse(x.Version)).First())
+        .Select(x => new PlaybookView(x.Id, x.Name, x.Version, x.Sha256)).ToArray();
     var jobs = await (from j in db.Jobs join h in db.Hosts on j.HostId equals h.Id join d in db.Deployments on j.DeploymentId equals d.Id orderby j.CreatedAt descending select new JobView(j.Id, d.Id, d.Name, h.Id, h.Hostname, j.Status, j.CancelRequested, j.CreatedAt, j.StartedAt, j.FinishedAt, j.ExitCode, j.Summary)).Take(200).ToArrayAsync(ct);
     return new DashboardView(hosts, playbooks, jobs);
 });
 admin.MapPost("/deployments", async (DeploymentRequest r, HttpContext c, DeploymentService s, CancellationToken ct) => Results.Ok(new { id = await s.CreateAsync(r, c.User.Identity!.Name!, ct) }));
 admin.MapPost("/jobs/{id:guid}/cancel", async (Guid id, HttpContext c, DeploymentService s, CancellationToken ct) => { await s.CancelAsync(id, c.User.Identity!.Name!, ct); return Results.NoContent(); });
 admin.MapPost("/hosts/{id:guid}/revoke", async (Guid id, HttpContext c, DeploymentService s, CancellationToken ct) => { await s.RevokeAsync(id, c.User.Identity!.Name!, ct); return Results.NoContent(); });
+admin.MapPost("/hosts/{id:guid}/deregister", async (Guid id, HttpContext c, DeploymentService s, CancellationToken ct) => { await s.DeregisterAsync(id, c.User.Identity!.Name!, ct); return Results.NoContent(); });
 admin.MapGet("/jobs/{id:guid}/logs", async (Guid id, RegistryDb db, CancellationToken ct) => Results.Ok(await db.Logs.Where(x => x.JobId == id).OrderBy(x => x.Sequence).Select(x => new { x.Sequence, x.CreatedAt, x.Text }).ToArrayAsync(ct)));
 admin.MapGet("/audit", async (RegistryDb db, CancellationToken ct) => Results.Ok(await db.Audit.OrderByDescending(x => x.Id).Take(200).ToArrayAsync(ct)));
 app.Run();

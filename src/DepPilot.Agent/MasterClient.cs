@@ -8,15 +8,15 @@ using DepPilot.Contracts;
 
 namespace DepPilot.Agent;
 
-public sealed class MasterClient(HttpClient http, AgentOptions options, AgentState state)
+public sealed class MasterClient(HttpClient http, AgentOptions options, AgentState state, HostResources resources)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
     public async Task RegisterAsync(CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/agents/register")
         {
-            Content = JsonContent.Create(new RegistrationRequest(state.Identity.InstallationId, options.Hostname, RuntimeInformation.OSDescription, Version, state.Identity.Token), options: Json)
+            Content = JsonContent.Create(new RegistrationRequest(state.Identity.InstallationId, options.Hostname, RuntimeInformation.OSDescription, Version, state.Identity.Token, HostResources.Address(), HostResources.Capabilities), options: Json)
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.BootstrapToken);
         using var response = await http.SendAsync(request, ct);
@@ -24,7 +24,7 @@ public sealed class MasterClient(HttpClient http, AgentOptions options, AgentSta
         var result = await response.Content.ReadFromJsonAsync<RegistrationResponse>(Json, ct) ?? throw new InvalidOperationException("Missing enrollment response.");
         state.SetHost(result.HostId);
     }
-    public async Task HeartbeatAsync(CancellationToken ct) { using var response = await SendAsync("api/agent/heartbeat", new HeartbeatRequest(Version), ct); }
+    public async Task HeartbeatAsync(CancellationToken ct) { using var response = await SendAsync("api/agent/heartbeat", new HeartbeatRequest(Version, resources.Sample(), HostResources.Address(), HostResources.Capabilities), ct); }
     public async Task<JobAssignment?> ClaimAsync(CancellationToken ct)
     {
         using var response = await SendAsync("api/agent/jobs/claim", new { }, ct);

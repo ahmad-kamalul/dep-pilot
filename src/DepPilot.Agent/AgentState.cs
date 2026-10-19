@@ -14,6 +14,7 @@ public sealed class AgentState
     public AgentState(AgentOptions options)
     {
         directory = Path.GetFullPath(options.StateDirectory);
+        if (File.Exists(Path.Combine(directory, "deregistered.json"))) throw new InvalidOperationException("This Agent was deregistered. Provision a new installation deliberately before restarting it.");
         Directory.CreateDirectory(directory);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var path = Path.Combine(directory, "identity.json");
