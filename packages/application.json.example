@@ -1,0 +1,6 @@
+{
+  "name": "Deploy example application",
+  "version": "1.0.0",
+  "playbook": "example.yml",
+  "prerequisites": ["List the required runtimes, collections, and preloaded images"]
+}

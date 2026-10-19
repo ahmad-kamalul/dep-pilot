@@ -1,0 +1,13 @@
+---
+- name: Deploy an approved application
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Verify prerequisites
+      ansible.builtin.assert:
+        that: false
+        fail_msg: Replace this template with application-specific prerequisites before enabling it.
+    # Add installation and readiness tasks inside a block.
+    # Add a rescue section that restores prior configuration and retains data.
+    # End rescue with ansible.builtin.fail so failed deployments remain failed.

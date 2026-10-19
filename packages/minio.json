@@ -1,0 +1,6 @@
+{
+  "name": "Deploy standalone MinIO",
+  "version": "1.1.1",
+  "playbook": "minio.yml",
+  "prerequisites": ["Linux or Windows with WSL", "Ansible and community.docker", "Accessible Docker engine", "Preloaded dep-pilot/minio:2025-10-15 image"]
+}

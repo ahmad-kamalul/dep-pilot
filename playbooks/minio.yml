@@ -6,56 +6,112 @@
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     minio_image: dep-pilot/minio:2025-10-15
+    minio_storage_path: ""
+    minio_ready_retries: 30
   tasks:
     - name: Validate deployment settings
       ansible.builtin.assert:
         that:
           - minio_name is match('^dep-pilot-minio-[a-f0-9]{32}$')
-          - minio_api_port | int >= 1024
-          - minio_api_port | int <= 65535
-          - minio_console_port | int >= 1024
-          - minio_console_port | int <= 65535
+          - minio_api_port | int >= 1024 and minio_api_port | int <= 65535
+          - minio_console_port | int >= 1024 and minio_console_port | int <= 65535
           - minio_api_port | int != minio_console_port | int
-          - minio_root_user | length >= 3
-          - minio_root_password | length >= 16
+          - minio_root_user | length >= 3 and minio_root_password | length >= 16
+          - minio_storage_path == '' or (minio_storage_path.startswith('/') and ':' not in minio_storage_path and '..' not in minio_storage_path)
       no_log: true
 
-    - name: Ensure persistent MinIO volume exists
+    - name: Verify Docker connection and required image
+      community.docker.docker_image_info:
+        name: "{{ minio_image }}"
+      register: image
+    - name: Require a preloaded deployment image
+      ansible.builtin.assert:
+        that: image.images | length > 0
+        fail_msg: Build and load the approved MinIO image before deployment.
+
+    - name: Inspect previous installation
+      community.docker.docker_container_info:
+        name: "{{ minio_name }}"
+      register: previous
+      no_log: true
+    - name: Keep persistent storage
       community.docker.docker_volume:
         name: "{{ minio_name }}-data"
         state: present
+      when: minio_storage_path == ''
 
-    - name: Ensure pinned MinIO container is running
-      community.docker.docker_container:
-        name: "{{ minio_name }}"
-        image: "{{ minio_image }}"
-        pull: never
-        state: started
-        restart_policy: unless-stopped
-        command: server /data --console-address :9001
-        published_ports:
-          - "{{ minio_bind_address }}:{{ minio_api_port }}:9000"
-          - "{{ minio_bind_address }}:{{ minio_console_port }}:9001"
-        volumes:
-          - "{{ minio_name }}-data:/data"
-        env:
-          MINIO_ROOT_USER: "{{ minio_root_user }}"
-          MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
-        labels:
-          dep-pilot.managed: "true"
-          dep-pilot.host: "{{ minio_name }}"
-      no_log: true
-
-    - name: Wait for MinIO readiness on the target Docker host
-      ansible.builtin.uri:
-        url: "http://{{ minio_probe_host }}:{{ minio_api_port }}/minio/health/ready"
-        status_code: 200
-        return_content: false
-      register: readiness
-      until: readiness.status == 200
-      retries: 30
-      delay: 2
+    - name: Install and verify MinIO
+      block:
+        - name: Ensure approved MinIO container is running
+          community.docker.docker_container:
+            name: "{{ minio_name }}"
+            image: "{{ minio_image }}"
+            pull: never
+            state: started
+            restart_policy: unless-stopped
+            command: server /data --console-address :9001
+            published_ports:
+              - "{{ minio_bind_address }}:{{ minio_api_port }}:9000"
+              - "{{ minio_bind_address }}:{{ minio_console_port }}:9001"
+            volumes:
+              - "{{ minio_storage_path if minio_storage_path else minio_name + '-data' }}:/data"
+            env:
+              MINIO_ROOT_USER: "{{ minio_root_user }}"
+              MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
+            labels:
+              dep-pilot.managed: "true"
+              dep-pilot.host: "{{ minio_name }}"
+          no_log: true
+        - name: Verify application readiness
+          ansible.builtin.uri:
+            url: "http://{{ minio_probe_host }}:{{ minio_api_port }}/minio/health/ready"
+            status_code: 200
+          register: readiness
+          until: readiness.status == 200
+          retries: "{{ minio_ready_retries }}"
+          delay: 2
+      rescue:
+        - name: Remove failed new installation without deleting data
+          community.docker.docker_container:
+            name: "{{ minio_name }}"
+            state: absent
+            keep_volumes: true
+          when: not previous.exists
+        - name: Prepare previous ports and mounts for recovery
+          ansible.builtin.set_fact:
+            previous_ports: >-
+              {% set ports = [] %}
+              {% for port, bindings in previous.container.HostConfig.PortBindings.items() %}
+              {% for binding in bindings or [] %}
+              {% set _ = ports.append(binding.HostIp + ':' + binding.HostPort + ':' + port) %}
+              {% endfor %}{% endfor %}{{ ports | to_json }}
+            previous_mounts: >-
+              {% set mounts = [] %}
+              {% for mount in previous.container.Mounts %}
+              {% set _ = mounts.append((mount.Name if mount.Type == 'volume' else mount.Source) + ':' + mount.Destination + (':ro' if not mount.RW else ':rw')) %}
+              {% endfor %}{{ mounts | to_json }}
+          when: previous.exists
+          no_log: true
+        - name: Restore the previous container configuration
+          community.docker.docker_container:
+            name: "{{ minio_name }}"
+            image: "{{ previous.container.Image }}"
+            pull: never
+            state: "{{ 'started' if previous.container.State.Running else 'present' }}"
+            command: "{{ previous.container.Config.Cmd }}"
+            entrypoint: "{{ previous.container.Config.Entrypoint | default(omit, true) }}"
+            env: "{{ dict(previous.container.Config.Env | map('split', '=', 1)) }}"
+            published_ports: "{{ previous_ports | from_json }}"
+            volumes: "{{ previous_mounts | from_json }}"
+            labels: "{{ previous.container.Config.Labels | default({}, true) }}"
+            restart_policy: "{{ previous.container.HostConfig.RestartPolicy.Name | default('no', true) }}"
+            recreate: true
+          when: previous.exists
+          no_log: true
+        - name: Report the failed deployment after recovery
+          ansible.builtin.fail:
+            msg: "Deployment failed. Previous container configuration restored when present; application data retained. Inspect workload health before retrying."
 
     - name: Report deployment outcome
       ansible.builtin.debug:
-        msg: "MinIO is ready. API port {{ minio_api_port }}, console port {{ minio_console_port }}. Persistent volume retained."
+        msg: "MinIO is ready. API port {{ minio_api_port }}, console port {{ minio_console_port }}. Persistent data retained."
