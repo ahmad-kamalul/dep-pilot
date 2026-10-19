@@ -90,3 +90,12 @@ stateDiagram-v2
 | Credential revoked | Further Agent API access is denied; running work stops when renewal fails |
 | Master restarts | Database jobs and persisted cookie keys survive |
 | MinIO fails readiness | Playbook exits unsuccessfully and job is marked failed |
+
+## Extensions
+
+- Agents report IP, capabilities, and timestamped CPU/memory/disk samples. Dashboard refresh remains every five seconds; telemetry can be older than that according to the heartbeat interval.
+- Reviewed JSON package manifests seed immutable playbook versions. Only the latest version per application is listed for new deployments; previous versions remain linked to historical jobs.
+- MinIO checks Docker/image prerequisites before changes. Ansible rescue restores a previous managed container configuration or removes a failed first installation, retaining storage. Recovered installations still report the deployment as failed.
+- Deregistration rejects running work, cancels queued work, revokes credentials, clears telemetry, and hides the host. Tombstones prevent identity reuse; history is retained.
+- The SQLite startup upgrade adds missing telemetry/retirement columns without deleting existing identities. This is a small additive compatibility upgrade, not a general migration framework.
+- Linux uses native Ansible. Windows runs the self-contained Worker as a Windows Service and invokes Ansible through its configured WSL distro.

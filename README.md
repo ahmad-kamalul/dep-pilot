@@ -1,18 +1,18 @@
 # Dep Pilot
 
-A .NET deployment system that manages hosts and deploys standalone MinIO instances through Ansible. View host status, deployment results, logs, and audit history from one dashboard.
+A .NET deployment system that manages hosts and deploys standalone MinIO instances through Ansible. View host resources, deployment results, logs, and audit history from one dashboard.
 
 ## How it works
 
-1. Agents register with the Master and send heartbeats.
+1. Agents register with IP/capabilities and send heartbeats with CPU, memory, and disk usage.
 2. An administrator selects hosts and starts a deployment.
-3. Each Agent runs the approved playbook locally and reports its result.
+3. Each Agent runs the approved playbook locally, reports its result, and restores the previous MinIO configuration if installation fails.
 
-**Stack:** ASP.NET Core 10, .NET Worker Service, Razor Pages, SQLite, Ansible, and Docker Compose. ASP.NET Core 10 satisfies the assessment's 8+ requirement.
+**Stack:** ASP.NET Core 10, .NET Worker Service, Razor Pages, SQLite, Ansible, and Docker Compose.
 
 ## Preview
 
-![Dep Pilot dashboard](docs/screenshots/dashboard.jpg)
+![Dep Pilot host resources and deployment controls](docs/screenshots/host-resources.jpg)
 
 [View deployment logs and audit screenshots](docs/SCREENSHOTS.md).
 
@@ -26,9 +26,9 @@ From the project folder:
 python scripts/start_demo.py
 ```
 
-The first build can take several minutes. It creates local credentials and starts a Master with two simulated Linux hosts.
+The first build can take several minutes. It creates local credentials, an HTTPS certificate, and two simulated Linux hosts. For browser access, trust your generated `secrets/master.crt` in your local user certificate store; Agents and test scripts already trust this certificate. Never share its private key.
 
-1. Open **http://localhost:8080**.
+1. Open **https://localhost:8080**.
 2. Sign in as **admin** using `secrets/admin-password.txt`.
 3. Wait for both hosts to appear online.
 4. Select the hosts, name the deployment, and run the MinIO playbook.
@@ -61,12 +61,12 @@ See [validation](docs/VALIDATION.md) for Docker tests and full demo checks.
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Components and system flow |
 | [API](docs/API.md) | Endpoints and authentication |
+| [Agent installation](docs/INSTALLATION.md) | Self-contained Linux/Windows service setup |
+| [Deployment packages](docs/PACKAGES.md) | Approved playbooks and application templates |
 | [Configuration](docs/CONFIGURATION.md) | Ports, credentials, and settings |
 | [Operations](docs/OPERATIONS.md) | Commands and troubleshooting |
 | [Security](docs/SECURITY.md) | Controls and limitations |
 | [Validation](docs/VALIDATION.md) | Test results and commands |
 | [TODO](docs/TODO.md) | Ideas for industrial use |
-
-This is a local reference demo with one Master and an approved MinIO playbook. Production improvements are listed in TODO. The Docker mock uses privileged engine sidecars; review the security notes before changing network exposure.
 
 Original code is rights reserved; see [LICENSE-NOTICE.md](LICENSE-NOTICE.md). Third-party licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

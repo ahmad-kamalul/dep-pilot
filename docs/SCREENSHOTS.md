@@ -1,10 +1,14 @@
 # Dep Pilot screenshots
 
-Screenshots captured from a local, two-Agent Docker demo.
+Screenshots captured from the local HTTPS demo with two Agents. Resource values describe each Agent environment.
 
 ## Dashboard
 
 ![Dep Pilot dashboard with two registered Agents and deployment history](screenshots/dashboard.jpg)
+
+## Host resources
+
+![Host metadata, CPU, memory, disk, and retirement controls](screenshots/host-resources.jpg)
 
 ## Deployment output
 

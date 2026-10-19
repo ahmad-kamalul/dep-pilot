@@ -5,10 +5,9 @@ These features are planned ideas and are not yet implemented.
 ## High priority
 
 - [ ] Add company login (SSO), multi-factor authentication, and user roles.
-- [ ] Use HTTPS for all Master and Agent connections.
 - [ ] Add secure Agent registration and credential rotation.
 - [ ] Store passwords and tokens in a secret manager.
-- [ ] Provide a production installation guide for real Linux hosts.
+- [ ] Validate packaged service installation across the supported target environments.
 - [ ] Support safe database upgrades, backups, and recovery.
 - [ ] Add monitoring and alerts for system failures.
 - [ ] Set retention limits for logs and deployment history.
@@ -22,7 +21,7 @@ These features are planned ideas and are not yet implemented.
 - [ ] Review and approve playbook versions before use.
 - [ ] Deploy to a small group first, then continue if health checks pass.
 - [ ] Monitor application health after deployment.
-- [ ] Add recovery or rollback steps that protect application data.
+- [ ] Extend rollback to more workloads and test storage/schema compatibility.
 - [ ] Add PostgreSQL and multiple Masters when scale or availability requires them.
 - [ ] Improve search, filtering, and pagination for larger host fleets.
 - [ ] Export audit records to a protected external system.
@@ -32,7 +31,6 @@ These features are planned ideas and are not yet implemented.
 ## Optional improvements
 
 - [ ] Integrate deployments with CI/CD pipelines.
-- [ ] Add reusable deployment templates.
 - [ ] Detect unexpected changes on target hosts.
-- [ ] Support Windows hosts if required.
+- [ ] Validate Windows Service deployment execution using the service account's WSL environment.
 - [ ] Add deployment schedules and reports.

@@ -6,13 +6,20 @@ Local verification: **19 October 2026**, using Windows 11, .NET SDK 10.0.402, an
 
 | Check | Result |
 |---|---|
-| Release tests on Windows and Linux | 20 passed on each platform |
-| Two-Agent registration and MinIO deployment | Passed |
+| Release tests on Windows and Linux | 29 passed on each platform |
+| Two-Agent registration, IP/capabilities, and resource metrics | Passed |
+| MinIO deployment on both targets | Passed |
 | MinIO readiness and S3 upload/download | Passed on both targets |
 | Repeat deployment | Passed with `changed=0` |
 | Master and MinIO restart persistence | Passed |
 | Offline detection, queued cancellation, and Agent recovery | Passed |
 | Authentication, job ownership, and known-secret redaction | Passed |
+| HTTPS trust and hostname rejection | Passed |
+| First-install and update rollback, preserving data | Passed |
+| Deregistration, pending cleanup, and local credential retirement | Passed |
+| Configurable bind storage and rollback | Passed |
+| Browser login, metadata/resources, two-host deployment, logs, and audit | Passed; no browser console warnings/errors |
+| Self-contained Windows/Linux binary enrollment and metrics | Passed |
 | Image builds, Compose, and script syntax checks | Passed |
 | NuGet vulnerability audit | No known vulnerabilities reported at verification time |
 
@@ -34,8 +41,19 @@ Test the running demo:
 python scripts/start_demo.py
 python scripts/smoke_test.py
 python scripts/failure_scenarios.py
+python scripts/rollback_test.py
+python scripts/security_lifecycle_test.py
 ```
 
 Use a disposable demo: these checks create deployments, restart services, and temporarily stop Agent B.
+
+To build and check self-contained binaries with the .NET 10 SDK:
+
+```sh
+python scripts/publish_agents.py
+python scripts/native_agent_test.py
+```
+
+Windows Service Control Manager/systemd installation and Windows WSL deployment execution have not been end-to-end validated on this machine. Native binary tests cover HTTPS enrollment, resource reporting, and Windows local logging.
 
 These are local results. Check GitHub Actions separately for CI results. Production load, penetration, and disaster-recovery testing remain future work.

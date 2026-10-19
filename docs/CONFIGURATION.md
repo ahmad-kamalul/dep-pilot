@@ -32,10 +32,20 @@ Use environment variables with `__` between sections and names.
 | `Agent__PollSeconds` | Check for jobs every N seconds | `5` |
 | `Agent__HeartbeatSeconds` | Send a heartbeat every N seconds | `15` |
 
-Compose supplies its own Master address and enables HTTP for the local demo. Use HTTPS outside that demo. Full settings are listed in [MasterOptions](../src/DepPilot.Master/Services/MasterOptions.cs), [AgentOptions](../src/DepPilot.Agent/AgentOptions.cs), and [compose.yaml](../compose.yaml).
+Compose uses HTTPS and a generated local certificate. Agents trust the public certificate through `Agent__ServerCertificateFile`; normal installations can use the OS certificate trust store. Full settings are listed in [MasterOptions](../src/DepPilot.Master/Services/MasterOptions.cs), [AgentOptions](../src/DepPilot.Agent/AgentOptions.cs), and [compose.yaml](../compose.yaml).
+
+Additional Agent settings:
+
+| Variable | Purpose |
+|---|---|
+| `Agent__MinioStoragePath` | Optional absolute directory on the target Docker host; empty uses a named volume |
+| `Agent__ServerCertificateFile` | Public certificate for a private/demo CA |
+| `Agent__WslDistribution` | Windows execution distro; default `Ubuntu` |
+
+For a bind-mounted MinIO directory, create it on the target first and grant UID/GID `10001` write access. Ports and credentials remain configurable through Agent settings and secret files.
 
 ## Data and playbooks
 
 Docker volumes preserve the Master database, Agent identities, and MinIO data. Keep each Agent's identity unique.
 
-The Master includes one approved MinIO playbook. Changing its content requires a new version in the Master seed configuration; playbook upload/edit is not available in the UI.
+Approved applications are defined in `packages/*.json`. Changing a playbook requires a new package version. See [packages](PACKAGES.md); upload/edit is not available in the UI.
