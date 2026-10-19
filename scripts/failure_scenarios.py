@@ -1,4 +1,5 @@
 """Test Agent outage, queued-job cancellation, recovery, and access isolation in the local demo."""
+import ssl
 import subprocess
 from urllib import request, error
 from smoke_test import Demo, ROOT
@@ -11,7 +12,7 @@ def run(*arguments):
 
 def main():
     config = compose_configuration()
-    demo = Demo(f'http://localhost:{published_port(config, "master", 8080)}')
+    demo = Demo(f'https://localhost:{published_port(config, "master", 8080)}')
     demo.login()
     initial = demo.call("/api/admin/dashboard")
     host = next(h for h in initial["hosts"] if h["hostname"] == "warehouse-b" and not h["revoked"])
@@ -21,7 +22,7 @@ def main():
     for path, data, headers in (("/api/admin/dashboard", None, {}),
                                 ("/api/agent/jobs/claim", b"{}", {"Content-Type": "application/json", "Authorization": "Bearer " + "0" * 64})):
         try:
-            request.urlopen(request.Request(base + path, data=data, headers=headers), timeout=10)
+            request.urlopen(request.Request(base + path, data=data, headers=headers), timeout=10, context=ssl.create_default_context(cafile=str(ROOT / "secrets/master.crt")))
         except error.HTTPError as exc:
             assert exc.code == 401, f"Expected 401, received {exc.code}"
         else:

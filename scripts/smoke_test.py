@@ -2,6 +2,7 @@
 from pathlib import Path
 from urllib import request, parse, error
 from http.cookiejar import CookieJar
+import ssl
 import argparse
 import json
 import re
@@ -17,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class Demo:
     def __init__(self, base):
         self.base = base.rstrip("/")
-        self.client = request.build_opener(request.HTTPCookieProcessor(CookieJar()))
+        self.client = request.build_opener(request.HTTPCookieProcessor(CookieJar()), request.HTTPSHandler(context=ssl.create_default_context(cafile=str(ROOT / "secrets/master.crt"))))
         self.csrf = None
 
     def call(self, path, body=None, form=False):
@@ -79,7 +80,7 @@ def main():
     parser.add_argument("--skip-restart", action="store_true")
     args = parser.parse_args()
     configuration = compose_configuration()
-    base_url = args.base_url or f'http://localhost:{published_port(configuration, "master", 8080)}'
+    base_url = args.base_url or f'https://localhost:{published_port(configuration, "master", 8080)}'
     demo = Demo(base_url)
     demo.login()
 
@@ -90,6 +91,11 @@ def main():
 
     dashboard, hosts = demo.wait(ready_hosts)
     print("PASS: two Agents registered and online")
+    def resources_ready():
+        current = demo.call("/api/admin/dashboard")["hosts"]
+        return all(h.get("metrics") and h["metrics"]["cpuPercent"] is not None and h.get("ipAddress") and "docker" in (h.get("capabilities") or []) for h in current if h["id"] in [host["id"] for host in hosts])
+    demo.wait(resources_ready, timeout=60)
+    print("PASS: IP, capabilities, CPU, memory, and disk metrics received")
     ids = [h["id"] for h in hosts]
     playbook = dashboard["playbooks"][0]["id"]
     demo.rollout("Smoke / initial deployment", ids, playbook)

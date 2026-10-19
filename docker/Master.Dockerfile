@@ -4,11 +4,12 @@ COPY Directory.Build.props global.json ./
 COPY src/DepPilot.Contracts/ src/DepPilot.Contracts/
 COPY src/DepPilot.Master/ src/DepPilot.Master/
 COPY playbooks/ playbooks/
+COPY packages/ packages/
 RUN dotnet publish src/DepPilot.Master -c Release -o /app --no-self-contained
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN apt-get update && apt-get install -y --no-install-recommends curl openssl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app ./

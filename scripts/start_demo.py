@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from init_secrets import initialize
+from init_tls import initialize_tls
 from demo_support import compose_configuration, published_port
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,7 @@ def main():
     preflight()
     initialize()
     run("--profile", "tools", "build", "master", "agent-a", "minio-image")
+    initialize_tls()
     run("up", "-d", "--wait", "--wait-timeout", "180", "master", "docker-host-a", "docker-host-b")
     for host in ("docker-host-a", "docker-host-b"):
         print(f"Loading source-built MinIO into {host}…", flush=True)
@@ -45,7 +47,7 @@ def main():
             raise RuntimeError(f"Image import failed for {host}")
     run("up", "-d", "--no-build", "agent-a", "agent-b")
     port = published_port(compose_configuration(), "master", 8080)
-    print(f"Dep Pilot started. Open http://localhost:{port} and sign in as admin using secrets/admin-password.txt.")
+    print(f"Dep Pilot started. Open https://localhost:{port} and sign in as admin using secrets/admin-password.txt.")
     print("Next: python scripts/smoke_test.py")
 
 

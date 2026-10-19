@@ -15,10 +15,11 @@ x-agent: &agent
   secrets:
     - bootstrap_token
     - minio_password
+    - master_certificate
 
 x-agent-env: &agent-env
-  Agent__MasterUrl: http://master:8080
-  Agent__AllowInsecureHttp: "true"
+  Agent__MasterUrl: https://master:8080
+  Agent__ServerCertificateFile: /run/secrets/master_certificate
   Agent__StateDirectory: /app/state
   Agent__MinioBindAddress: 0.0.0.0
   DEP_PILOT_BOOTSTRAP_TOKEN_FILE: /run/secrets/bootstrap_token
@@ -35,12 +36,14 @@ services:
     ports:
       - "127.0.0.1:${MASTER_PORT:-8080}:8080"
     environment:
-      Master__AllowInsecureHttp: "true"
+      ASPNETCORE_URLS: https://+:8080
+      Kestrel__Certificates__Default__Path: /run/secrets/master_certificate
+      Kestrel__Certificates__Default__KeyPath: /run/secrets/master_key
       Master__DatabasePath: /app/data/dep-pilot.db
       DEP_PILOT_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
       DEP_PILOT_BOOTSTRAP_TOKEN_FILE: /run/secrets/bootstrap_token
       DOTNET_EnableDiagnostics: "0"
-    secrets: [admin_password, bootstrap_token]
+    secrets: [admin_password, bootstrap_token, master_certificate, master_key]
     volumes: [master-data:/app/data]
     read_only: true
     tmpfs: [/tmp]
@@ -48,7 +51,7 @@ services:
     cap_drop: [ALL]
     networks: [control]
     healthcheck:
-      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/healthz]
+      test: [CMD, curl, --fail, --silent, --cacert, /run/secrets/master_certificate, https://127.0.0.1:8080/healthz]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -124,6 +127,8 @@ services:
     profiles: [tools]
 
 secrets:
+  master_certificate: {file: ./secrets/master.crt}
+  master_key: {file: ./secrets/master.key}
   admin_password: {file: ./secrets/admin-password.txt}
   bootstrap_token: {file: ./secrets/bootstrap-token.txt}
   minio_password: {file: ./secrets/minio-password.txt}
