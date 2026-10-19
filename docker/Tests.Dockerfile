@@ -4,4 +4,5 @@ COPY Directory.Build.props global.json DepPilot.sln ./
 COPY src/ src/
 COPY tests/ tests/
 COPY playbooks/ playbooks/
+COPY packages/ packages/
 RUN dotnet test DepPilot.sln -c Release --logger trx --results-directory /results

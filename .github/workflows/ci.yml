@@ -16,7 +16,10 @@ concurrency:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +33,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: TestResults
           retention-days: 7
 
@@ -50,6 +53,10 @@ jobs:
         run: python scripts/smoke_test.py
       - name: Exercise Agent outage, cancellation, recovery, and access rejection
         run: python scripts/failure_scenarios.py
+      - name: Exercise rollback and data preservation
+        run: python scripts/rollback_test.py
+      - name: Verify TLS and host deregistration
+        run: python scripts/security_lifecycle_test.py
       - name: Print service diagnostics on failure
         if: failure()
         run: docker compose ps --all && docker compose logs --tail 100

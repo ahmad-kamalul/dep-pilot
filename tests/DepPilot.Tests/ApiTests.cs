@@ -10,7 +10,7 @@ using Xunit;
 
 namespace DepPilot.Tests;
 
-public sealed class ApiTests
+public sealed partial class ApiTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
     private static HttpClient Client(MasterFactory factory) => factory.CreateClient(new() { AllowAutoRedirect = false });

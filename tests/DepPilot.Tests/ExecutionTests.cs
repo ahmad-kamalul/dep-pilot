@@ -56,7 +56,7 @@ public sealed class ExecutionTests
         var path = Path.Combine(Path.GetTempPath(), "dep-pilot-runner-" + Guid.NewGuid());
         try
         {
-            var options = new AgentOptions { StateDirectory = path, AnsibleExecutable = Path.Combine(path, "nonexistent-ansible"), MinioRootPassword = "test-only-private-password" };
+            var options = new AgentOptions { StateDirectory = path, AnsibleExecutable = Path.Combine(path, "nonexistent-ansible"), UseWsl = false, MinioRootPassword = "test-only-private-password" };
             var state = new AgentState(options);
             state.SetHost(Guid.NewGuid());
             var runner = new PlaybookRunner(options, state);
