@@ -1,147 +1,72 @@
 # Dep Pilot
 
-**A deployment control plane built with ASP.NET Core and .NET Worker Services.** Register hosts, execute an approved Ansible playbook locally on each target, and inspect per-host results from one administrative dashboard.
+A .NET deployment system that manages hosts and deploys standalone MinIO instances through Ansible. View host status, deployment results, logs, and audit history from one dashboard.
 
-Dep Pilot is a reference implementation for learning and technical assessment review. The included workload is a standalone MinIO instance on each target host. It implements real orchestration and real Ansible execution; the Docker demo simulates two Linux hosts using isolated Docker engines.
+## How it works
 
-## What is included
+1. Agents register with the Master and send heartbeats.
+2. An administrator selects hosts and starts a deployment.
+3. Each Agent runs the approved playbook locally and reports its result.
 
-- ASP.NET Core 10 Master API and responsive Razor Pages dashboard.
-- .NET Worker Agent with persistent identity, self-registration, independent heartbeats, and outbound job polling.
-- SQLite-backed registry, immutable playbook version, deployments, per-host jobs, logs, and audit events.
-- Atomic claims, execution leases, timeout handling, cancellation, credential revocation, and retry-safe result delivery.
-- An idempotent Ansible playbook that deploys MinIO with persistent storage and a readiness check.
-- Docker Compose demo with two independent simulated hosts, generated secrets, and a source-built MinIO image.
-- Automated integration tests, Docker smoke test, CI workflow, architecture notes, API reference, and operations guide.
+**Stack:** ASP.NET Core 10, .NET Worker Service, Razor Pages, SQLite, Ansible, and Docker Compose. ASP.NET Core 10 satisfies the assessment's 8+ requirement.
 
-## Screenshots
-
-View the [screenshot gallery](docs/SCREENSHOTS.md) for the dashboard, deployment output, and audit trail.
+## Preview
 
 ![Dep Pilot dashboard](docs/screenshots/dashboard.jpg)
 
-## Quick start
+[View deployment logs and audit screenshots](docs/SCREENSHOTS.md).
 
-Requirements: Docker Engine / Docker Desktop **running Linux containers**, Docker Compose v2.20+, Python 3.10+, internet access for the first build, and approximately 8 GB of memory available to Docker. Windows users can run the Python scripts from PowerShell. A local .NET SDK is unnecessary for the Docker path.
+## Try the demo
+
+Requires Docker running Linux containers, Docker Compose v2.20+, Python 3.10+, and internet access for the first build. Allow about 8 GB of memory for Docker. A local .NET SDK is not required for this demo.
+
+From the project folder:
 
 ```sh
 python scripts/start_demo.py
 ```
 
-The initial build compiles MinIO from pinned official source and can take several minutes. The script generates credentials, builds the Master and Agent, starts the isolated Docker engines, imports MinIO into each engine, and starts both Agents. Re-running it preserves existing credentials and persistent data.
+The first build can take several minutes. It creates local credentials and starts a Master with two simulated Linux hosts.
 
 1. Open **http://localhost:8080**.
-2. Sign in as **admin**, using the value in `secrets/admin-password.txt`.
-3. Wait for `warehouse-a` and `warehouse-b` to appear online.
-4. Select both hosts, enter a deployment name, and select the approved MinIO playbook.
-5. Start the deployment and inspect each host's result and output.
+2. Sign in as **admin** using `secrets/admin-password.txt`.
+3. Wait for both hosts to appear online.
+4. Select the hosts, name the deployment, and run the MinIO playbook.
+5. Open the job logs to inspect the result.
 
 After deployment:
 
-| Target | S3 endpoint | Console |
+| Host | MinIO S3 API | Console |
 |---|---|---|
 | warehouse-a | http://localhost:19000 | http://localhost:19001 |
 | warehouse-b | http://localhost:29000 | http://localhost:29001 |
 
-MinIO username: `dep-pilot`. Password: the value in `secrets/minio-password.txt`. The pinned community edition has a limited console; S3 readiness is the primary automated check.
+MinIO username: `dep-pilot`. Password: `secrets/minio-password.txt`. Each installation generates its own credentials. Copy `.env.example` to `.env` to change ports.
 
-Run the complete demo verification:
+Stop the demo with `docker compose stop`; stored data is preserved.
 
-```sh
-python scripts/smoke_test.py
-python scripts/failure_scenarios.py
-```
+## Tests
 
-The smoke test verifies two registered Agents, successful deployments, MinIO readiness, authenticated S3 upload/download, a second run with `changed=0`, omission of configured credentials from job output, Master restart persistence, and object persistence across MinIO restarts. The failure scenarios stop only the demo's Agent B, verify heartbeat expiry and offline queued-job cancellation, then restore the Agent and confirm its identity and cancellation state. Run these against a disposable local demo with no active deployment work.
-
-To run alongside another demo, copy `.env.example` to `.env` and choose unused ports. The scripts resolve the effective Master and MinIO ports from Compose configuration. `.env` and generated credentials are excluded from Git. Default published ports are listed above; your local overrides take precedence.
+With the .NET 10 SDK:
 
 ```sh
-docker compose logs -f master agent-a agent-b
-docker compose stop
-docker compose up -d
+dotnet test DepPilot.sln -c Release
 ```
 
-Use the start script again if a simulated engine's data volume has been recreated, because that engine needs its MinIO image reimported. `docker compose down` removes containers and networks but preserves named volumes. MinIO instances remain inside the engine volumes while the outer stack is stopped. See [operations](docs/OPERATIONS.md) before removing volumes.
-
-## Architecture
-
-```mermaid
-flowchart TB
-    UI[Admin browser] -->|Cookie + CSRF| Master[Master API and Razor Pages]
-    Master --> DB[(SQLite: registry, playbooks, jobs, logs, audit)]
-    A[Agent A] -->|Enrollment, heartbeats, polling, results| Master
-    B[Agent B] -->|Enrollment, heartbeats, polling, results| Master
-    A --> AnsibleA[Local Ansible runner]
-    B --> AnsibleB[Local Ansible runner]
-    AnsibleA --> EngineA[Target A Docker engine]
-    AnsibleB --> EngineB[Target B Docker engine]
-    EngineA --> MinioA[Standalone MinIO A + volume]
-    EngineB --> MinioB[Standalone MinIO B + volume]
-```
-
-The Master is one modular application. The Agents are separate deployable processes. Agents need no inbound application port. SQLite is appropriate for the single-Master assessment; the code does not claim support for multiple concurrent Master instances.
-
-## Local .NET development
-
-Install the .NET 10 SDK. The Master can run on Windows, Linux, or macOS; actual playbook execution requires a Linux Agent environment with Ansible and Docker access.
-
-```sh
-dotnet restore
-dotnet build -c Release
-dotnet test -c Release
-python scripts/init_secrets.py
-```
-
-For a loopback-only Master on PowerShell:
-
-```powershell
-$env:Master__AllowInsecureHttp = 'true'
-$env:Master__DatabasePath = "$PWD/work/local-master.db"
-$env:DEP_PILOT_ADMIN_PASSWORD_FILE = "$PWD/secrets/admin-password.txt"
-$env:DEP_PILOT_BOOTSTRAP_TOKEN_FILE = "$PWD/secrets/bootstrap-token.txt"
-$env:ASPNETCORE_URLS = 'http://127.0.0.1:8080'
-dotnet run --project src/DepPilot.Master
-```
-
-For a native Linux Agent, set `Agent__MasterUrl`, secret file paths, `Agent__StateDirectory`, and the target's MinIO settings as described in [configuration](docs/CONFIGURATION.md). Build and load the pinned MinIO image into that host's Docker engine first. Install the Ansible collection from `playbooks/requirements.yml`.
-
-## Repository map
-
-```text
-src/DepPilot.Master/      API, security, persistence, job lifecycle, admin UI
-src/DepPilot.Agent/       Enrollment, heartbeats, execution, result recovery
-src/DepPilot.Contracts/   Shared transport messages and job statuses
-tests/DepPilot.Tests/     API integration, concurrency, and execution tests
-playbooks/                  Approved MinIO playbook and collection versions
-docker/                     Master, Agent, and source-built MinIO images
-scripts/                    Secret initialization, demo startup, smoke verification
-docs/                       Architecture, APIs, security, operations, and review notes
-.github/workflows/          Build/test and full Docker demo verification
-```
-
-## Design choices and boundaries
-
-- **Pull-based REST:** outbound connectivity and simple debugging, with five-second polling rather than a broker.
-- **Durable jobs:** the database is the queue; HTTP requests never execute deployments themselves.
-- **No automatic redispatch:** a lost lease becomes `TimedOut`. Operators inspect local state before explicitly creating another deployment.
-- **One active job per host:** concurrent API requests cannot queue conflicting work for the same host.
-- **Approved playbooks only:** the initial version seeds one trusted playbook; arbitrary upload or remote shell commands are deliberately outside the implemented scope.
-- **Output after execution:** bounded, sanitized Ansible output is uploaded when execution finishes; status and host availability update during execution.
-- **Local-demo transport:** Compose explicitly opts into HTTP, binds web ports to loopback, and isolates plaintext Docker APIs on separate bridges. Real deployments require HTTPS and appropriate Docker access controls.
-- **MinIO availability:** the community project is archived and legacy image availability changed. The demo builds the requested workload from official commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` rather than depending on vanished registry tags. Review its maintenance and licensing before any production use.
+See [validation](docs/VALIDATION.md) for Docker tests and full demo checks.
 
 ## Documentation
 
-| Document | Purpose |
+| Document | Contents |
 |---|---|
-| [Architecture](docs/ARCHITECTURE.md) | Components, data flow, consistency, and failure behavior |
-| [API reference](docs/API.md) | Authentication, endpoint contracts, and examples |
-| [Configuration](docs/CONFIGURATION.md) | Settings, secret files, and native deployment |
-| [Security](docs/SECURITY.md) | Trust boundaries, implemented controls, and limitations |
-| [Operations](docs/OPERATIONS.md) | Runbook, troubleshooting, backups, and recovery |
-| [Assessment mapping](docs/ASSESSMENT.md) | Requirement coverage, demo plan, and tradeoffs |
-| [Validation](docs/VALIDATION.md) | Evidence and verification instructions |
-| [Commit guide](docs/COMMIT_GUIDE.md) | Logical commit structure and review order |
+| [Architecture](docs/ARCHITECTURE.md) | Components and system flow |
+| [API](docs/API.md) | Endpoints and authentication |
+| [Configuration](docs/CONFIGURATION.md) | Ports, credentials, and settings |
+| [Operations](docs/OPERATIONS.md) | Commands and troubleshooting |
+| [Security](docs/SECURITY.md) | Controls and limitations |
+| [Validation](docs/VALIDATION.md) | Test results and commands |
+| [TODO](docs/TODO.md) | Ideas for industrial use |
 
-This is an independent educational reference project with no vendor affiliation. Third-party software keeps its own license. See [third-party notices](THIRD_PARTY_NOTICES.md).
+This is a local reference demo with one Master and an approved MinIO playbook. Production improvements are listed in TODO. The Docker mock uses privileged engine sidecars; review the security notes before changing network exposure.
+
+Original code is rights reserved; see [LICENSE-NOTICE.md](LICENSE-NOTICE.md). Third-party licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
