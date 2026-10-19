@@ -1,0 +1,33 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+TestResults/
+**/state/
+**/secrets/
+.env
+*.user
+*.db*
+*.log
+artifacts/
+__pycache__/
+*.py[cod]
+!.env.example
+
+# Never publish personal notes, local evidence, or credential material.
+local-notes/
+private-notes/
+self-notes/
+nota-peribadi*/
+*.local.md
+*.pem
+*.pfx
+*.key
+*.tar
+/work/
+**/keys/
+
+# Internal review documents are kept outside this repository.
+/docs/COMMIT_GUIDE.md
+/docs/ASSESSMENT.md
+/docs/REQUIREMENT_AUDIT.md
