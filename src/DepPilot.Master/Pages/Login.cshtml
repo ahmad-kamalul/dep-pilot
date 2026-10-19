@@ -1,0 +1,7 @@
+@page
+@model LoginModel
+@{ ViewData["Title"] = "Sign in"; }
+<div class="login-shell"><section class="login-intro"><p class="eyebrow">ONE PLACE. EVERY HOST.</p><h1>Deploy with<br />confidence.</h1><p>Coordinate trusted playbooks, track your hosts, and follow every deployment from start to finish.</p><div class="feature-note">Secure enrollment · Durable jobs · Clear audit history</div></section>
+<section class="panel login-card"><p class="eyebrow">ADMINISTRATOR ACCESS</p><h2>Welcome back</h2><p class="muted">Sign in to your deployment workspace.</p>
+<form method="post"><div asp-validation-summary="All" class="error" role="alert"></div><label asp-for="Username">Username</label><input asp-for="Username" autocomplete="username" required maxlength="120" /><label asp-for="Password">Password</label><input asp-for="Password" type="password" autocomplete="current-password" required /><button class="button primary full" type="submit">Sign in →</button></form>
+</section></div>

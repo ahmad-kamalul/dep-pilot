@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>@ViewData["Title"] · Dep Pilot</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="topbar"><a class="brand" href="/">◈ <span>Dep Pilot</span></a><span class="product-label">DEPLOYMENT CONTROL</span>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <form method="post" asp-page="/Logout"><span class="admin-name">@User.Identity.Name</span><button class="button subtle" type="submit">Sign out</button></form>
+    }
+    </header>
+    <main>@RenderBody()</main>
+    <footer>Dep Pilot reference platform <span>Master / Agent architecture · v1.0</span></footer>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
