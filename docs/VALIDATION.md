@@ -1,12 +1,12 @@
 # Validation
 
-Local verification: **19 October 2026**, using Windows 11, .NET SDK 10.0.402, and Docker with Linux containers.
+Local verification: **20 October 2026**, using Windows 11, .NET SDK 10.0.402, and Docker with Linux containers.
 
 ## Results
 
 | Check | Result |
 |---|---|
-| Release tests on Windows and Linux | 29 passed on each platform |
+| Release tests on Windows and Linux | 31 passed on each platform |
 | Two-Agent registration, IP/capabilities, and resource metrics | Passed |
 | MinIO deployment on both targets | Passed |
 | MinIO readiness and S3 upload/download | Passed on both targets |
@@ -18,7 +18,8 @@ Local verification: **19 October 2026**, using Windows 11, .NET SDK 10.0.402, an
 | First-install and update rollback, preserving data | Passed |
 | Deregistration, pending cleanup, and local credential retirement | Passed |
 | Configurable bind storage and rollback | Passed |
-| Browser login, metadata/resources, two-host deployment, logs, and audit | Passed; no browser console warnings/errors |
+| Dashboard selection, Busy hosts, logs, and audit | Passed in browser; no console warnings/errors |
+| Form state, auto-refresh, duplicate submission, and connection recovery | Passed in local DOM checks |
 | Self-contained Windows/Linux binary enrollment and metrics | Passed |
 | Image builds, Compose, and script syntax checks | Passed |
 | NuGet vulnerability audit | No known vulnerabilities reported at verification time |

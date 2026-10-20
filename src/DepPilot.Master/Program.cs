@@ -117,7 +117,8 @@ admin.MapGet("/dashboard", async (RegistryDb db, CancellationToken ct) =>
 {
     var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     var registered = await db.Hosts.Where(x => x.DeregisteredAt == null).OrderBy(x => x.Hostname).ToListAsync(ct);
-    var hosts = registered.Select(x => HostRegistry.View(x, settings, now)).ToArray();
+    var busy = (await db.Jobs.Where(x => x.Status == JobStatus.Pending || x.Status == JobStatus.Running).Select(x => x.HostId).Distinct().ToListAsync(ct)).ToHashSet();
+    var hosts = registered.Select(x => HostRegistry.View(x, settings, now) with { Busy = busy.Contains(x.Id) }).ToArray();
     var available = await db.Playbooks.ToListAsync(ct);
     var playbooks = available.GroupBy(x => x.Name).Select(g => g.OrderByDescending(x => System.Version.Parse(x.Version)).First())
         .Select(x => new PlaybookView(x.Id, x.Name, x.Version, x.Sha256)).ToArray();

@@ -10,6 +10,12 @@ Screenshots captured from the local HTTPS demo with two Agents. Resource values 
 
 ![Host metadata, CPU, memory, disk, and retirement controls](screenshots/host-resources.jpg)
 
+## Deployment controls
+
+Busy hosts are locked while work is queued or running. Select available hosts and enter a name to enable deployment.
+
+![Busy host, selection guidance, and disabled deployment button](screenshots/deployment-selection.png)
+
 ## Deployment output
 
 ![Ansible task output in the deployment log dialog](screenshots/deployment-log.jpg)

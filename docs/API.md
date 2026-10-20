@@ -73,13 +73,15 @@ Metrics contain `cpuPercent` (null until the second sample), `memoryUsedBytes`, 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/admin/csrf` | Obtain mutation token |
-| GET | `/api/admin/dashboard` | Hosts, approved playbooks, latest 200 jobs |
+| GET | `/api/admin/dashboard` | Hosts (including `busy`), approved playbooks, latest 200 jobs |
 | POST | `/api/admin/deployments` | Create one job per selected host |
 | POST | `/api/admin/jobs/{jobId}/cancel` | Cancel pending work or request running cancellation |
 | POST | `/api/admin/hosts/{hostId}/revoke` | Revoke credential and terminate active job records |
 | POST | `/api/admin/hosts/{hostId}/deregister` | Retire host, cancel pending work, retain history; 409 while running |
 | GET | `/api/admin/jobs/{jobId}/logs` | Ordered persisted output |
 | GET | `/api/admin/audit` | Latest 200 audit events |
+
+A host is `busy` while any job is Pending or Running, including jobs outside the latest 200 records. Deployment requests targeting busy hosts return 409.
 
 Create deployment:
 

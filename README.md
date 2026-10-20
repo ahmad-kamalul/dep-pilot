@@ -12,7 +12,7 @@ A .NET deployment system that manages hosts and deploys standalone MinIO instanc
 
 ## Preview
 
-![Dep Pilot host resources and deployment controls](docs/screenshots/host-resources.jpg)
+![Dep Pilot host resources, Busy indicator, and deployment controls](docs/screenshots/deployment-selection.png)
 
 [View deployment logs and audit screenshots](docs/SCREENSHOTS.md).
 
@@ -33,6 +33,8 @@ The first build can take several minutes. It creates local credentials, an HTTPS
 3. Wait for both hosts to appear online.
 4. Select the hosts, name the deployment, and run the MinIO playbook.
 5. Open the job logs to inspect the result.
+
+Busy hosts cannot be selected. The deployment button becomes available after you select hosts, choose a playbook, and enter a name. Offline hosts can still receive queued work.
 
 After deployment:
 
